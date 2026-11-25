@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fotos de Expedição</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: barra de busca fixa no topo, galeria de cartões agrupada por dia, fotos abrem num visualizador lateral. */
+:root {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --ink: #1b1f27;
+  --muted: #5d6674;
+  --line: #dde1e7;
+  --accent: #7b2d5b;
+  --accent-ink: #ffffff;
+  --ok: #1f7a4d;
+  --warn: #9a5b00;
+  --bad: #b3261e;
+  --shade: rgba(20, 22, 27, .55);
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161b; --surface: #1d2027; --ink: #e8eaee; --muted: #9aa3b2; --line: #2c313b;
+    --accent: #d58ab8; --accent-ink: #1b1020; --ok: #5fcf9a; --warn: #e5b061; --bad: #ff8a80;
+    --shade: rgba(0, 0, 0, .65); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161b; --surface: #1d2027; --ink: #e8eaee; --muted: #9aa3b2; --line: #2c313b;
+  --accent: #d58ab8; --accent-ink: #1b1020; --ok: #5fcf9a; --warn: #e5b061; --bad: #ff8a80;
+  --shade: rgba(0, 0, 0, .65); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/1.45 var(--sans); }
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top-in { max-width: 1280px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; flex-direction: column; margin-right: auto; }
+.brand h1 { font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+.brand span { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-weight: 500; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+a.btn { color: var(--ink); display: inline-block; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+
+main { max-width: 1280px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.find { display: flex; flex-direction: column; gap: 10px; }
+.search { position: relative; }
+.search input { width: 100%; padding: 12px 14px 12px 14px; font-size: 17px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.search input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 7px 12px; cursor: pointer; border-right: 1px solid var(--line); color: var(--muted); }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.filters label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.filters input[type="date"], .filters select, .field input, .field select, .field textarea {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 9px;
+}
+.status { min-height: 22px; margin: 0; color: var(--muted); font-size: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.status.err { color: var(--bad); }
+
+.day { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.day h2 { font-size: 15px; font-weight: 600; }
+.day span { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; text-align: left; padding: 0; cursor: pointer; min-width: 0; }
+.card:hover { border-color: var(--accent); }
+.thumb { aspect-ratio: 4 / 3; background: color-mix(in srgb, var(--line) 60%, var(--bg)); display: block; width: 100%; object-fit: cover; }
+.thumb.empty { display: grid; place-items: center; color: var(--muted); font-size: 12px; }
+.card .meta { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ped { font: 500 14px var(--mono); overflow-wrap: anywhere; }
+.sub { color: var(--muted); font-size: 12.5px; display: flex; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.prod { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pill { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.empty-state { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 28px 20px; text-align: center; color: var(--muted); }
+.empty-state h2 { color: var(--ink); font-size: 17px; margin-bottom: 6px; }
+.more { align-self: center; }
+
+dialog { border: 0; border-radius: 14px; padding: 0; background: var(--surface); color: var(--ink); max-width: min(980px, 96vw); width: 100%; max-height: 94vh; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+dialog::backdrop { background: var(--shade); }
+.dlg-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.dlg-head h2 { font-size: 17px; margin-right: auto; }
+.dlg-body { padding: 16px 18px; overflow: auto; max-height: calc(94vh - 130px); display: flex; flex-direction: column; gap: 14px; }
+.dlg-foot { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--line); }
+.dlg-foot .grow { margin-right: auto; color: var(--muted); font-size: 14px; }
+
+.drop { border: 2px dashed var(--line); border-radius: 12px; padding: 18px; text-align: center; color: var(--muted); }
+.drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.defaults { display: flex; gap: 12px; flex-wrap: wrap; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.field > span { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+.field input, .field select, .field textarea { width: 100%; }
+.field input.mono { font-family: var(--mono); }
+.field.auto input { border-left: 3px solid var(--ok); }
+.field.need input { border-color: var(--bad); }
+
+.queue { display: flex; flex-direction: column; gap: 10px; }
+.q-item { display: grid; grid-template-columns: 112px 1fr auto; gap: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px; align-items: start; }
+.q-item.done { opacity: .6; }
+.q-thumb { position: relative; }
+.q-thumb img { width: 112px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; background: var(--line); display: block; }
+.q-thumb button { position: absolute; right: 4px; bottom: 4px; }
+.q-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.q-state { grid-column: 1 / -1; font-size: 13px; color: var(--muted); }
+.q-state.ok { color: var(--ok); }
+.q-state.warn { color: var(--warn); }
+.q-state.bad { color: var(--bad); }
+
+.view { display: grid; grid-template-columns: 1fr 330px; min-height: 0; }
+.view-img { background: #0e1014; display: grid; place-items: center; overflow: auto; min-height: 320px; max-height: calc(94vh - 60px); position: relative; }
+.view-img img { max-width: 100%; max-height: calc(94vh - 60px); object-fit: contain; cursor: zoom-in; }
+.view-img img.zoom { max-width: none; max-height: none; cursor: zoom-out; }
+.view-img .wait { color: #cfd4dc; position: absolute; bottom: 12px; left: 12px; font-size: 13px; background: rgba(0,0,0,.5); padding: 3px 10px; border-radius: 99px; }
+.view-side { padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: auto; max-height: calc(94vh - 60px); border-left: 1px solid var(--line); }
+.kv { display: grid; grid-template-columns: 92px 1fr; gap: 4px 10px; margin: 0; font-size: 14px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+.kv dd.mono { font-family: var(--mono); }
+.when { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.note { font-size: 12.5px; color: var(--muted); margin: 0; }
+.nav { display: flex; gap: 6px; }
+
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 99px; font-size: 14px; z-index: 50; max-width: 92vw; }
+.toast[hidden] { display: none; }
+
+@media (max-width: 760px) {
+  .view { grid-template-columns: 1fr; }
+  .view-side { border-left: 0; border-top: 1px solid var(--line); max-height: none; }
+  .view-img { max-height: 55vh; }
+  .view-img img { max-height: 55vh; }
+  .q-item { grid-template-columns: 1fr; }
+  .q-thumb img { width: 100%; max-width: 220px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <div class="brand">
+      <h1>Fotos de Expedição</h1>
+      <span id="resumo">Plump Moda</span>
+    </div>
+    <button class="btn primary" id="btnAdd" type="button">Adicionar fotos</button>
+    <button class="btn" id="btnCfg" type="button">Configurar</button>
+  </div>
+</header>
+
+<main>
+  <section class="find" aria-label="Busca">
+    <div class="search">
+      <label class="sr" for="q">Buscar foto</label>
+      <input id="q" type="search" placeholder="Número do pedido, NF, produto ou loja" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="filters">
+      <div class="seg" id="seg" role="group" aria-label="Período">
+        <button type="button" data-p="hoje" aria-pressed="true">Hoje</button>
+        <button type="button" data-p="ontem" aria-pressed="false">Ontem</button>
+        <button type="button" data-p="7" aria-pressed="false">7 dias</button>
+        <button type="button" data-p="30" aria-pressed="false">30 dias</button>
+        <button type="button" data-p="tudo" aria-pressed="false">Tudo</button>
+      </div>
+      <label>De <input type="date" id="de"></label>
+      <label>Até <input type="date" id="ate"></label>
+      <label class="sr" for="fLoja">Loja</label>
+      <select id="fLoja"><option value="">Todas as lojas</option></select>
+      <label class="sr" for="fOper">Operador</label>
+      <select id="fOper"><option value="">Todos os operadores</option></select>
+    </div>
+    <p class="status" id="status" role="status"></p>
+  </section>
+
+  <section id="lista" aria-label="Fotos"></section>
+  <button class="btn more" id="more" type="button" hidden>Mostrar mais</button>
+</main>
+
+<!-- Adicionar fotos -->
+<dialog id="dlgUp" aria-labelledby="upT">
+  <div class="dlg-head"><h2 id="upT">Adicionar fotos</h2><button class="btn ghost small" type="button" id="upFechar">Fechar</button></div>
+  <div class="dlg-body">
+    <div class="drop" id="drop">
+      <p style="margin:0 0 10px">Arraste as fotos aqui ou escolha no aparelho. A data e a hora da foto são lidas do arquivo.</p>
+      <input type="file" id="arq" accept="image/*" multiple class="sr">
+      <button class="btn primary" type="button" id="btnEscolher">Escolher fotos</button>
+    </div>
+    <div class="defaults">
+      <label class="field"><span>Loja padrão</span><select id="upLoja"></select></label>
+      <label class="field"><span>Operador</span><input id="upOper" type="text" autocomplete="name" placeholder="Seu nome"></label>
+    </div>
+    <div class="queue" id="fila"></div>
+  </div>
+  <div class="dlg-foot">
+    <span class="grow" id="upResumo">Nenhuma foto na fila.</span>
+    <button class="btn primary" type="button" id="upSalvar" disabled>Salvar fotos</button>
+  </div>
+</dialog>
+
+<!-- Visualizador -->
+<dialog id="dlgView" aria-labelledby="vPed">
+  <div class="dlg-head">
+    <h2 id="vPed" style="font-family:var(--mono)"></h2>
+    <div class="nav">
+      <button class="btn small" type="button" id="vPrev" aria-label="Foto anterior">←</button>
+      <button class="btn small" type="button" id="vNext" aria-label="Próxima foto">→</button>
+    </div>
+    <button class="btn ghost small" type="button" id="vFechar">Fechar</button>
+  </div>
+  <div class="view">
+    <div class="view-img" id="vImgBox"><img id="vImg" alt="Foto do pedido embalado"><span class="wait" id="vWait" hidden>Carregando foto completa…</span></div>
+    <div class="view-side" id="vSide"></div>
+  </div>
+</dialog>
+
+<!-- Configuração -->
+<dialog id="dlgCfg" aria-labelledby="cfgT" style="max-width:520px">
+  <div class="dlg-head"><h2 id="cfgT">Configurar este aparelho</h2><button class="btn ghost small" type="button" id="cfgFechar">Fechar</button></div>
+  <div class="dlg-body">
+    <p class="note" style="font-size:14px">Cada aparelho guarda estes dados uma vez. Peça a senha a quem administra o sistema.</p>
+    <label class="field" id="cfgUrlBox"><span>Endereço do servidor (URL do Apps Script)</span><input id="cfgUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" spellcheck="false"></label>
+    <label class="field"><span>Senha de acesso</span><input id="cfgSenha" type="password" autocomplete="off"></label>
+    <label class="field"><span>Seu nome (operador)</span><input id="cfgOper" type="text" placeholder="Ex.: André"></label>
+    <p class="status" id="cfgStatus" role="status"></p>
+  </div>
+  <div class="dlg-foot">
+    <span class="grow"></span>
+    <button class="btn" type="button" id="cfgTestar">Testar conexão</button>
+    <button class="btn primary" type="button" id="cfgSalvar">Salvar</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script>
+(function () {
+'use strict';
+
+/* ===== Ajustes ===== */
+// Depois de publicar o Apps Script, cole o endereço aqui para que ninguém precise digitar.
+const WEB_APP_URL = '';
+const LOJAS = ['TikTok Shop', 'Shopee', 'Mercado Livre', 'Temu', 'Shein', 'Loja física', 'Outro'];
+const LADO_MAX = 1800;        // maior lado da foto salva, em pixels
+const QUALIDADE = 0.8;        // qualidade JPEG da foto salva
+const LADO_MINI = 360;        // largura da miniatura
+const POR_PAGINA = 60;
+const ENVIOS_SIMULTANEOS = 2;
+
+/* ===== Utilidades ===== */
+const $ = (id) => document.getElementById(id);
+function h(tag, attrs, ...filhos) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === false || v == null) continue;
+    if (k === 'class') el.className = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'text') el.textContent = v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const f of filhos.flat()) if (f != null) el.append(f.nodeType ? f : document.createTextNode(String(f)));
+  return el;
+}
+const pad = (n) => String(n).padStart(2, '0');
+function agoraLocal(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+function diaLocal(d) { return agoraLocal(d).slice(0, 10); }
+function addDias(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function brData(s) { const [a, m, d] = s.slice(0, 10).split('-'); return `${d}/${m}/${a}`; }
+function brHora(s) { return s.slice(11, 16); }
+function brDataHora(s) { return `${brData(s)} às ${s.slice(11, 19) || '00:00:00'}`; }
+function nomeDia(dia) {
+  const d = new Date(dia + 'T12:00:00');
+  const hoje = diaLocal(new Date());
+  const ontem = diaLocal(addDias(new Date(), -1));
+  const base = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(d);
+  const txt = dia === hoje ? 'Hoje, ' + base : dia === ontem ? 'Ontem, ' + base : base;
+  return txt.charAt(0).toUpperCase() + txt.slice(1);
+}
+let toastTimer;
+function aviso(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3200); }
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+const cede = () => new Promise((r) => setTimeout(r, 0));
+
+/* ===== Configuração do aparelho ===== */
+const CFG_KEY = 'fotos_expedicao_cfg_v1';
+const cfg = { url: '', senha: '', operador: '', loja: '' };
+(function lerCfg() {
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } catch (e) { /* sem armazenamento */ }
+  if (WEB_APP_URL) cfg.url = WEB_APP_URL;
+})();
+function gravarCfg() { try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch (e) { /* ignora */ } }
+const configurado = () => !!(cfg.url && cfg.senha);
+
+/* ===== Servidor ===== */
+async function api(acao, dados, limiteMs) {
+  if (!configurado()) throw new Error('Configure o servidor e a senha antes de usar.');
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), limiteMs || 90000);
+  try {
+    const r = await fetch(cfg.url, {
+      method: 'POST', redirect: 'follow', signal: ctl.signal,
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({}, dados, { acao, senha: cfg.senha }))
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.erro || 'Erro no servidor.');
+    return j;
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('O servidor demorou demais. Tente de novo.');
+    if (e instanceof TypeError || e instanceof SyntaxError) throw new Error('Não consegui falar com o servidor. Confira o endereço e a internet.');
+    throw e;
+  } finally { clearTimeout(timer); }
+}
+
+/* ===== Estado da galeria ===== */
+let linhas = [];            // registros carregados
+let modoBusca = false;
+let periodo = 'hoje';
+let mostrados = POR_PAGINA;
+let tokenCarga = 0;
+const miniCache = new Map();   // linha -> dataURL
+const imgPorLinha = new Map(); // linha -> <img>
+
+function intervalo() {
+  const hoje = new Date();
+  if (periodo === 'hoje') return [diaLocal(hoje), diaLocal(hoje)];
+  if (periodo === 'ontem') { const o = diaLocal(addDias(hoje, -1)); return [o, o]; }
+  if (periodo === '7') return [diaLocal(addDias(hoje, -6)), diaLocal(hoje)];
+  if (periodo === '30') return [diaLocal(addDias(hoje, -29)), diaLocal(hoje)];
+  if (periodo === 'tudo') return ['0000-00-00', '9999-99-99'];
+  return [$('de').value || '0000-00-00', $('ate').value || '9999-99-99'];
+}
+
+function dizStatus(msg, erro) { const s = $('status'); s.className = 'status' + (erro ? ' err' : ''); s.replaceChildren(msg instanceof Node ? msg : document.createTextNode(msg || '')); }
+
+async function carregar() {
+  const meu = ++tokenCarga;
+  if (!configurado()) { linhas = []; renderizar(); dizStatus(''); return; }
+  const termo = $('q').value.trim();
+  modoBusca = termo.length >= 2;
+  dizStatus(modoBusca ? 'Buscando em todo o histórico…' : 'Carregando…');
+  try {
+    let r;
+    if (modoBusca) r = await api('buscar', { q: termo });
+    else { const [de, ate] = intervalo(); r = await api('listar', { de, ate }); }
+    if (meu !== tokenCarga) return;
+    linhas = r.linhas; mostrados = POR_PAGINA;
+    atualizarFiltros(); renderizar();
+    const n = filtradas().length;
+    const txt = modoBusca
+      ? `${n} ${n === 1 ? 'resultado' : 'resultados'} em todo o histórico${r.cortou ? ' (mostrando os mais recentes)' : ''}`
+      : `${n} ${n === 1 ? 'foto' : 'fotos'} no período${r.cortou ? ' (mostrando as mais recentes; refine o período)' : ''}`;
+    dizStatus(txt);
+  } catch (e) {
+    if (meu !== tokenCarga) return;
+    dizStatus(e.message, true);
+  }
+}
+
+function atualizarFiltros() {
+  const lojas = [...new Set(linhas.map((r) => r.loja).filter(Boolean))].sort();
+  const ops = [...new Set(linhas.map((r) => r.operador).filter(Boolean))].sort();
+  const refaz = (sel, rotulo, valores) => {
+    const atual = sel.value;
+    sel.replaceChildren(h('option', { value: '', text: rotulo }), ...valores.map((v) => h('option', { value: v, text: v })));
+    sel.value = valores.includes(atual) ? atual : '';
+  };
+  refaz($('fLoja'), 'Todas as lojas', lojas);
+  refaz($('fOper'), 'Todos os operadores', ops);
+}
+
+function filtradas() {
+  const l = $('fLoja').value, o = $('fOper').value;
+  return linhas.filter((r) => (!l || r.loja === l) && (!o || r.operador === o));
+}
+
+/* ===== Galeria ===== */
+let lista = [];
+const observador = 'IntersectionObserver' in window ? new IntersectionObserver((itens) => {
+  for (const it of itens) if (it.isIntersecting) { precisa.add(Number(it.target.dataset.linha)); observador.unobserve(it.target); }
+  if (precisa.size) agendaMinis();
+}, { rootMargin: '300px' }) : null;
+const precisa = new Set();
+let minisTimer = null, minisAtivo = false;
+function agendaMinis() { clearTimeout(minisTimer); minisTimer = setTimeout(buscaMinis, 80); }
+async function buscaMinis() {
+  if (minisAtivo) { agendaMinis(); return; }
+  const lote = [...precisa].filter((n) => !miniCache.has(n)).slice(0, 30);
+  lote.forEach((n) => precisa.delete(n));
+  if (!lote.length) return;
+  minisAtivo = true;
+  try {
+    const r = await api('miniaturas', { linhas: lote });
+    for (const n of lote) {
+      const b64 = r.miniaturas[n];
+      if (b64) { miniCache.set(n, 'data:image/jpeg;base64,' + b64); const el = imgPorLinha.get(n); if (el) el.src = miniCache.get(n); }
+    }
+  } catch (e) { /* miniaturas são opcionais; segue sem elas */ }
+  minisAtivo = false;
+  if (precisa.size) agendaMinis();
+}
+
+function cartao(r, indice) {
+  const caixa = h('div', { class: 'thumb empty', text: 'carregando…' });
+  const img = h('img', { class: 'thumb', alt: `Pedido ${r.pedido}` });
+  img.hidden = true;
+  img.addEventListener('load', () => { img.hidden = false; caixa.hidden = true; });
+  imgPorLinha.set(r.linha, img);
+  const envoltorio = h('div', { 'data-linha': r.linha }, caixa, img);
+  if (miniCache.has(r.linha)) img.src = miniCache.get(r.linha);
+  else if (observador) observador.observe(envoltorio);
+  else { precisa.add(r.linha); agendaMinis(); }
+
+  return h('button', { class: 'card', type: 'button', onclick: () => abrirVisor(indice) },
+    envoltorio,
+    h('div', { class: 'meta' },
+      h('span', { class: 'ped', text: r.pedido }),
+      h('span', { class: 'sub' }, h('span', { text: brHora(r.tirada) }), r.nf ? h('span', { text: 'NF ' + r.nf }) : null),
+      r.loja ? h('span', null, h('span', { class: 'pill', text: r.loja })) : null,
+      r.produto ? h('span', { class: 'prod', text: r.produto, title: r.produto }) : null
+    )
+  );
+}
+
+function renderizar() {
+  lista = filtradas();
+  imgPorLinha.clear();
+  const caixa = $('lista');
+  caixa.replaceChildren();
+  $('more').hidden = true;
+  const total = linhas.length;
+  $('resumo').textContent = configurado() ? (total ? `${lista.length} ${lista.length === 1 ? 'foto' : 'fotos'} na tela` : 'Plump Moda') : 'Plump Moda';
+
+  if (!configurado()) {
+    caixa.append(h('div', { class: 'empty-state' },
+      h('h2', { text: 'Falta configurar este aparelho' }),
+      h('p', { text: 'Informe o endereço do servidor, a senha de acesso e o seu nome.' }),
+      h('button', { class: 'btn primary', type: 'button', onclick: abrirCfg, text: 'Configurar agora' })));
+    return;
+  }
+  if (!lista.length) {
+    caixa.append(h('div', { class: 'empty-state' },
+      h('h2', { text: modoBusca ? 'Nenhuma foto encontrada' : 'Nenhuma foto neste período' }),
+      h('p', { text: modoBusca ? 'Confira o número ou tente só os últimos dígitos do pedido.' : 'Use “Adicionar fotos” ou escolha outro período.' })));
+    return;
+  }
+  const visiveis = lista.slice(0, mostrados);
+  let diaAtual = null, grade = null;
+  visiveis.forEach((r, i) => {
+    if (r.dia !== diaAtual) {
+      diaAtual = r.dia;
+      const doDia = lista.filter((x) => x.dia === diaAtual).length;
+      caixa.append(h('div', { class: 'day' }, h('h2', { text: nomeDia(diaAtual) }), h('span', { text: `${doDia} ${doDia === 1 ? 'foto' : 'fotos'}` })));
+      grade = h('div', { class: 'grid' });
+      caixa.append(grade);
+    }
+    grade.append(cartao(r, i));
+  });
+  $('more').hidden = lista.length <= mostrados;
+  $('more').textContent = `Mostrar mais (${lista.length - mostrados} restantes)`;
+}
+
+/* ===== Visualizador ===== */
+let visorIdx = -1;
+const fotoCache = new Map();
+let editando = false;
+
+function abrirVisor(i) {
+  visorIdx = i; editando = false;
+  if (!$('dlgView').open) $('dlgView').showModal();
+  pintarVisor();
+}
+async function pintarVisor() {
+  const r = lista[visorIdx];
+  if (!r) return;
+  $('vPed').textContent = r.pedido;
+  $('vPrev').disabled = visorIdx <= 0;
+  $('vNext').disabled = visorIdx >= lista.length - 1;
+  const img = $('vImg');
+  img.classList.remove('zoom');
+  img.src = miniCache.get(r.linha) || '';
+  $('vWait').hidden = false;
+  pintarLateral(r);
+  const meu = r.id;
+  try {
+    let url = fotoCache.get(r.id);
+    if (!url) {
+      const resp = await api('foto', { linha: r.linha, id: r.id });
+      url = 'data:image/jpeg;base64,' + resp.foto;
+      fotoCache.set(r.id, url);
+      if (fotoCache.size > 8) fotoCache.delete(fotoCache.keys().next().value);
+    }
+    if (lista[visorIdx] && lista[visorIdx].id === meu) { img.src = url; $('vWait').hidden = true; }
+  } catch (e) {
+    if (lista[visorIdx] && lista[visorIdx].id === meu) { $('vWait').textContent = e.message; $('vWait').hidden = false; }
+  }
+}
+function linhaKV(rotulo, valor, mono) { return [h('dt', { text: rotulo }), h('dd', { class: mono ? 'mono' : '', text: valor || '—' })]; }
+function pintarLateral(r) {
+  const lado = $('vSide');
+  lado.replaceChildren();
+  lado.append(
+    h('div', null, h('div', { class: 'when', text: brDataHora(r.tirada) }), h('p', { class: 'note', text: 'Data e hora em que a foto foi tirada.' }))
+  );
+  if (!editando) {
+    lado.append(
+      h('dl', { class: 'kv' },
+        linhaKV('Pedido', r.pedido, true), linhaKV('NF', r.nf, true), linhaKV('Loja', r.loja),
+        linhaKV('Produto', r.produto), linhaKV('Operador', r.operador), linhaKV('Anotações', r.obs),
+        linhaKV('Salva em', r.criadoEm ? brDataHora(r.criadoEm) : ''), r.chave ? linhaKV('Chave NF-e', r.chave, true) : [],
+        r.editado ? linhaKV('Editada', r.editado) : []),
+      h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+        h('button', { class: 'btn small', type: 'button', onclick: copiarDados, text: 'Copiar dados' }),
+        h('a', { class: 'btn small', id: 'vBaixar', href: fotoCache.get(r.id) || '#', download: nomeArquivo(r), text: 'Baixar foto', style: 'text-decoration:none' }),
+        h('button', { class: 'btn small', type: 'button', onclick: () => { editando = true; pintarLateral(r); }, text: 'Corrigir dados' })));
+    const baixar = $('vBaixar');
+    if (baixar && !fotoCache.get(r.id)) { baixar.setAttribute('aria-disabled', 'true'); baixar.addEventListener('click', (e) => { if (!fotoCache.get(r.id)) e.preventDefault(); }); }
+  } else {
+    const campo = (rotulo, id, valor, mono) => h('label', { class: 'field' }, h('span', { text: rotulo }), h('input', { id, type: 'text', value: valor || '', class: mono ? 'mono' : '' }));
+    const selLoja = h('select', { id: 'eLoja' }, h('option', { value: '', text: '—' }), ...opcoesLoja(r.loja));
+    lado.append(
+      campo('Pedido', 'ePedido', r.pedido, true), campo('NF (número ou chave de 44 dígitos)', 'eNf', r.nf, true),
+      h('label', { class: 'field' }, h('span', { text: 'Loja' }), selLoja),
+      campo('Produto / SKU', 'eProd', r.produto), campo('Anotações', 'eObs', r.obs),
+      h('p', { class: 'note', text: 'A data e a hora da foto não podem ser alteradas depois de salvas. Toda correção fica registrada.' }),
+      h('div', { style: 'display:flex;gap:8px' },
+        h('button', { class: 'btn primary small', type: 'button', id: 'eSalvar', onclick: salvarEdicao, text: 'Salvar correção' }),
+        h('button', { class: 'btn small', type: 'button', onclick: () => { editando = false; pintarLateral(r); }, text: 'Cancelar' })));
+  }
+}
+function opcoesLoja(atual) {
+  const todas = LOJAS.includes(atual) || !atual ? LOJAS : [atual, ...LOJAS];
+  return todas.map((l) => h('option', { value: l, text: l, selected: l === atual }));
+}
+function nomeArquivo(r) { return `${r.tirada.replace(/[: ]/g, '-')}_${r.pedido.replace(/[^A-Za-z0-9_-]/g, '')}.jpg`; }
+async function copiarDados() {
+  const r = lista[visorIdx];
+  const txt = `Pedido ${r.pedido}${r.nf ? ' · NF ' + r.nf : ''}${r.loja ? ' · ' + r.loja : ''} · foto tirada em ${brDataHora(r.tirada)}`;
+  try { await navigator.clipboard.writeText(txt); aviso('Dados copiados.'); } catch (e) { aviso('Não consegui copiar. Selecione o texto manualmente.'); }
+}
+async function salvarEdicao() {
+  const r = lista[visorIdx];
+  const btn = $('eSalvar'); btn.disabled = true;
+  const nfBruto = $('eNf').value.replace(/\s/g, '');
+  let nf = nfBruto, chave = r.chave;
+  if (/^\d{44}$/.test(nfBruto)) { chave = nfBruto; nf = String(parseInt(nfBruto.slice(25, 34), 10)); }
+  try {
+    const resp = await api('editar', { id: r.id, linha: r.linha, pedido: $('ePedido').value, nf, chave, loja: $('eLoja').value, produto: $('eProd').value, obs: $('eObs').value, operador: cfg.operador });
+    Object.assign(r, resp.linha);
+    const i = linhas.findIndex((x) => x.id === r.id); if (i >= 0) linhas[i] = r;
+    editando = false; renderizar(); pintarLateral(r); $('vPed').textContent = r.pedido; aviso('Correção salva.');
+  } catch (e) { aviso(e.message); btn.disabled = false; }
+}
+
+/* ===== Leitura de EXIF (data da foto) ===== */
+function lerExif(buf) {
+  try {
+    const v = new DataView(buf);
+    if (v.getUint16(0) !== 0xFFD8) return {};
+    let off = 2;
+    while (off < v.byteLength - 4) {
+      const marcador = v.getUint16(off); off += 2;
+      if (marcador === 0xFFE1) {
+        if (v.getUint32(off + 2) === 0x45786966) return lerTiff(v, off + 8);
+        off += v.getUint16(off);
+      } else if ((marcador & 0xFF00) !== 0xFF00) break;
+      else off += v.getUint16(off);
+    }
+  } catch (e) { /* sem EXIF legível */ }
+  return {};
+}
+function lerTiff(v, tiff) {
+  const peq = v.getUint16(tiff) === 0x4949;
+  const u16 = (o) => v.getUint16(o, peq), u32 = (o) => v.getUint32(o, peq);
+  const texto = (o, n) => { let s = ''; for (let i = 0; i < n && v.getUint8(o + i); i++) s += String.fromCharCode(v.getUint8(o + i)); return s; };
+  const achado = {};
+  function ifd(inicio, nivel) {
+    const n = u16(inicio);
+    for (let i = 0; i < n; i++) {
+      const e = inicio + 2 + i * 12, tag = u16(e), tipo = u16(e + 2), cont = u32(e + 4);
+      if (tag === 0x8769 && nivel === 0) ifd(tiff + u32(e + 8), 1);
+      else if ((tag === 0x9003 || tag === 0x0132) && tipo === 2) {
+        const pos = cont > 4 ? tiff + u32(e + 8) : e + 8;
+        achado[tag === 0x9003 ? 'original' : 'modificada'] = texto(pos, cont);
+      }
+    }
+  }
+  ifd(tiff + u32(tiff + 4), 0);
+  const bruto = achado.original || achado.modificada;
+  const m = bruto && /^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/.exec(bruto);
+  return m && m[1] !== '0000' ? { data: `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}` } : {};
+}
+
+/* ===== Leitura de códigos de barras ===== */
+let leitorZX = null;
+function leitor() {
+  if (!window.ZXing) return null;
+  if (!leitorZX) {
+    const dicas = new Map();
+    dicas.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    dicas.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.CODE_39]);
+    leitorZX = new ZXing.MultiFormatReader(); leitorZX.setHints(dicas);
+  }
+  return leitorZX;
+}
+const rascunho = document.createElement('canvas');
+function pedaco(src, rot, fx, fy, fw, fh, largura) {
+  const rw = rot % 180 ? src.height : src.width, rh = rot % 180 ? src.width : src.height;
+  const sx = Math.round(fx * rw), sy = Math.round(fy * rh), sw = Math.max(1, Math.round(fw * rw)), sh = Math.max(1, Math.round(fh * rh));
+  const k = largura / sw, ow = Math.round(largura), oh = Math.max(1, Math.round(sh * k));
+  rascunho.width = ow; rascunho.height = oh;
+  const c = rascunho.getContext('2d', { willReadFrequently: true });
+  c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = '#fff'; c.fillRect(0, 0, ow, oh);
+  c.setTransform(k, 0, 0, k, -sx * k, -sy * k);
+  if (rot === 90) { c.translate(rw, 0); c.rotate(Math.PI / 2); }
+  else if (rot === 180) { c.translate(rw, rh); c.rotate(Math.PI); }
+  else if (rot === 270) { c.translate(0, rh); c.rotate(-Math.PI / 2); }
+  c.drawImage(src, 0, 0);
+  const px = c.getImageData(0, 0, ow, oh).data;
+  const lum = new Uint8ClampedArray(ow * oh);
+  for (let i = 0, j = 0; i < px.length; i += 4, j++) lum[j] = (px[i] * 299 + px[i + 1] * 587 + px[i + 2] * 114) / 1000;
+  return { lum, w: ow, h: oh };
+}
+function decodifica(p) {
+  const l = leitor();
+  try {
+    const bmp = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.RGBLuminanceSource(p.lum, p.w, p.h)));
+    return l.decode(bmp).getText();
+  } catch (e) { return null; }
+}
+// Procura códigos varrendo a foto em quatro rotações e em janelas sobrepostas. Para cedo quando acha pedido e NF.
+async function lerCodigos(canvas) {
+  const achados = new Set();
+  const temChave = () => [...achados].some((c) => /^\d{44}$/.test(c));
+  const temPedido = () => [...achados].some((c) => candidatoPedido(c));
+  for (const rot of [270, 90, 0, 180]) {
+    const tentativas = [[0, 0, 1, 1, 1400]];
+    for (const fy of [0, .25, .5]) for (const fx of [0, .25, .5]) tentativas.push([fx, fy, .65, .65, 1300]);
+    for (const [fx, fy, fw, fh, larg] of tentativas) {
+      const c = decodifica(pedaco(canvas, rot, fx, fy, Math.min(fw, 1 - fx), Math.min(fh, 1 - fy), larg));
+      if (c) achados.add(c);
+      await cede();
+      if (temChave() && temPedido()) return [...achados];
+    }
+    if (temPedido() && rot !== 270 && rot !== 90) break;
+  }
+  return [...achados];
+}
+function candidatoPedido(c) { return /^[A-Za-z0-9]{8,24}$/.test(c) && !/^\d{44}$/.test(c) && !/^\d{13}$/.test(c); }
+function interpretaCodigos(codigos) {
+  const r = {};
+  for (const c of codigos) {
+    if (/^\d{44}$/.test(c)) { r.chave = c; r.nf = String(parseInt(c.slice(25, 34), 10)); }
+    else if (!r.pedido && candidatoPedido(c)) r.pedido = c;
+  }
+  return r;
+}
+
+/* ===== Fila de upload ===== */
+const fila = [];
+let seq = 0;
+let processando = Promise.resolve();
+
+function abrirUpload() {
+  if (!configurado()) { abrirCfg(); return; }
+  const sel = $('upLoja');
+  sel.replaceChildren(...LOJAS.map((l) => h('option', { value: l, text: l })));
+  sel.value = LOJAS.includes(cfg.loja) ? cfg.loja : LOJAS[0];
+  $('upOper').value = cfg.operador || '';
+  $('dlgUp').showModal();
+  resumoFila();
+}
+
+function adicionarArquivos(arquivos) {
+  const imagens = [...arquivos].filter((f) => f.type.startsWith('image/') || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
+  if (!imagens.length) { aviso('Nenhuma imagem encontrada.'); return; }
+  for (const f of imagens) {
+    const item = { id: ++seq, file: f, estado: 'lendo', msg: 'Preparando foto…', pedido: '', nf: '', chave: '', loja: $('upLoja').value, produto: '', tirada: '', fonteData: '', blob: null, mini: '', hash: '', auto: {} };
+    fila.push(item);
+    item.el = montaItem(item);
+    $('fila').append(item.el);
+    processando = processando.then(() => prepara(item)).catch(() => {});
+  }
+  resumoFila();
+}
+
+async function prepara(item) {
+  try {
+    const buf = await item.file.arrayBuffer();
+    item.hash = await sha256(buf);
+    const exif = lerExif(buf.slice(0, 262144));
+    if (exif.data) { item.tirada = exif.data; item.fonteData = 'foto'; }
+    else { item.tirada = agoraLocal(new Date(item.file.lastModified || Date.now())); item.fonteData = 'arquivo'; }
+    const tela = await desenhaArquivo(item.file);
+    item.blob = await paraBlob(tela, LADO_MAX, QUALIDADE);
+    item.mini = await miniatura(tela);
+    item.el.querySelector('img').src = 'data:image/jpeg;base64,' + item.mini;
+    item.msg = 'Lendo códigos de barras…'; atualizaItem(item);
+    const cods = interpretaCodigos(await lerCodigos(tela).catch(() => []));
+    if (cods.pedido && !item.pedido) { item.pedido = cods.pedido; item.auto.pedido = true; }
+    if (cods.nf && !item.nf) { item.nf = cods.nf; item.chave = cods.chave; item.auto.nf = true; }
+    item.estado = 'pronta';
+    item.msg = cods.pedido ? 'Pedido lido da foto. Confira antes de salvar.' : 'Não consegui ler o código de barras. Digite o pedido ou use o leitor de código.';
+    item.aviso = !cods.pedido;
+  } catch (e) {
+    item.estado = 'erro'; item.msg = 'Não consegui abrir esta foto: ' + e.message;
+  }
+  atualizaItem(item); resumoFila();
+}
+
+async function sha256(buf) {
+  const d = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+async function desenhaArquivo(file) {
+  let fonte;
+  try { fonte = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch (e) {
+    fonte = await new Promise((ok, ruim) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ruim(new Error('formato não suportado')); im.src = URL.createObjectURL(file); });
+  }
+  const w = fonte.width || fonte.naturalWidth, hh = fonte.height || fonte.naturalHeight;
+  const k = Math.min(1, LADO_MAX / Math.max(w, hh));
+  const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(hh * k);
+  c.getContext('2d').drawImage(fonte, 0, 0, c.width, c.height);
+  if (fonte.close) fonte.close();
+  return c;
+}
+function paraBlob(canvas, lado, q) {
+  return new Promise((ok, ruim) => canvas.toBlob((b) => (b ? ok(b) : ruim(new Error('falha ao gerar imagem'))), 'image/jpeg', q));
+}
+async function miniatura(canvas) {
+  const k = LADO_MINI / canvas.width, c = document.createElement('canvas');
+  c.width = LADO_MINI; c.height = Math.max(1, Math.round(canvas.height * k));
+  c.getContext('2d').drawImage(canvas, 0, 0, c.width, c.height);
+  for (const q of [0.7, 0.55, 0.4]) {
+    const url = c.toDataURL('image/jpeg', q);
+    if (url.length < 45000) return url.split(',')[1];
+  }
+  return '';
+}
+function blobParaBase64(blob) {
+  return new Promise((ok, ruim) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.onerror = () => ruim(new Error('falha ao ler a imagem')); fr.readAsDataURL(blob); });
+}
+async function girar(item) {
+  if (!item.blob) return;
+  const bmp = await createImageBitmap(item.blob);
+  const c = document.createElement('canvas'); c.width = bmp.height; c.height = bmp.width;
+  const g = c.getContext('2d'); g.translate(c.width, 0); g.rotate(Math.PI / 2); g.drawImage(bmp, 0, 0); bmp.close();
+  item.blob = await paraBlob(c, LADO_MAX, 0.85);
+  item.mini = await miniatura(c);
+  item.el.querySelector('img').src = 'data:image/jpeg;base64,' + item.mini;
+}
+
+function montaItem(item) {
+  const campo = (rotulo, chave, extra) => {
+    const entrada = h('input', { type: 'text', id: `f${item.id}-${chave}`, value: item[chave] || '', class: extra && extra.mono ? 'mono' : '', inputmode: extra && extra.num ? 'numeric' : null, autocomplete: 'off', spellcheck: 'false' });
+    entrada.addEventListener('input', () => {
+      item[chave] = entrada.value; item.auto[chave] = false;
+      if (chave === 'nf') {
+        const limpo = entrada.value.replace(/\s/g, '');
+        if (/^\d{44}$/.test(limpo)) { item.chave = limpo; item.nf = String(parseInt(limpo.slice(25, 34), 10)); entrada.value = item.nf; }
+      }
+      marca(item); resumoFila();
+    });
+    return h('label', { class: 'field', 'data-campo': chave }, h('span', { text: rotulo }), entrada);
+  };
+  const selLoja = h('select', { id: `f${item.id}-loja` }, ...LOJAS.map((l) => h('option', { value: l, text: l, selected: l === item.loja })));
+  selLoja.addEventListener('change', () => { item.loja = selLoja.value; });
+  const quando = h('input', { type: 'datetime-local', step: '1', id: `f${item.id}-tirada` });
+  quando.addEventListener('change', () => { if (quando.value) { item.tirada = quando.value.replace('T', ' ').padEnd(19, ':00').slice(0, 19); item.fonteData = 'editada'; } atualizaItem(item); });
+  const el = h('div', { class: 'q-item' },
+    h('div', { class: 'q-thumb' }, h('img', { alt: '' }), h('button', { class: 'btn small', type: 'button', 'aria-label': 'Girar foto', text: '↻', onclick: () => girar(item) })),
+    h('div', { class: 'q-fields' },
+      campo('Pedido', 'pedido', { mono: true }), campo('NF ou chave', 'nf', { mono: true, num: true }),
+      h('label', { class: 'field' }, h('span', { text: 'Loja' }), selLoja),
+      campo('Produto / SKU', 'produto'),
+      h('label', { class: 'field' }, h('span', { text: 'Data e hora da foto' }), quando),
+      h('div', { class: 'q-state', 'data-estado': '' })),
+    h('button', { class: 'btn ghost small', type: 'button', text: 'Remover', onclick: () => { const i = fila.indexOf(item); if (i >= 0) fila.splice(i, 1); el.remove(); resumoFila(); } }));
+  item.refs = { quando, selLoja };
+  return el;
+}
+function marca(item) {
+  for (const k of ['pedido', 'nf']) item.el.querySelector(`[data-campo="${k}"]`).classList.toggle('auto', !!item.auto[k]);
+  item.el.querySelector('[data-campo="pedido"]').classList.toggle('need', item.estado !== 'salva' && !item.pedido.trim() && item.estado === 'pronta');
+}
+function atualizaItem(item) {
+  const el = item.el;
+  for (const k of ['pedido', 'nf', 'produto']) { const i = el.querySelector(`#f${item.id}-${k}`); if (i && i.value !== item[k]) i.value = item[k]; }
+  if (item.tirada) item.refs.quando.value = item.tirada.slice(0, 19).replace(' ', 'T');
+  item.refs.selLoja.value = item.loja;
+  const est = el.querySelector('[data-estado]');
+  let texto = item.msg || '';
+  if (item.estado === 'pronta' && item.fonteData === 'arquivo') texto += ' Esta foto não traz a data em que foi tirada; usei a data do arquivo. Corrija se precisar.';
+  est.textContent = texto;
+  est.className = 'q-state ' + (item.estado === 'salva' || item.estado === 'duplicada' ? 'ok' : item.estado === 'erro' ? 'bad' : item.aviso || (item.fonteData === 'arquivo' && item.estado === 'pronta') ? 'warn' : '');
+  el.classList.toggle('done', item.estado === 'salva' || item.estado === 'duplicada');
+  const travado = item.estado === 'salva' || item.estado === 'duplicada' || item.estado === 'enviando';
+  el.querySelectorAll('input,select,button').forEach((x) => { if (!x.textContent.includes('Remover')) x.disabled = travado; });
+  marca(item);
+}
+function resumoFila() {
+  const pend = fila.filter((i) => i.estado === 'pronta' || i.estado === 'erro' && i.blob);
+  const prontas = pend.filter((i) => i.pedido.trim());
+  const lendo = fila.filter((i) => i.estado === 'lendo').length;
+  const salvas = fila.filter((i) => i.estado === 'salva' || i.estado === 'duplicada').length;
+  const partes = [];
+  if (fila.length) partes.push(`${fila.length} ${fila.length === 1 ? 'foto' : 'fotos'}`);
+  if (lendo) partes.push(`${lendo} em preparo`);
+  if (salvas) partes.push(`${salvas} salvas`);
+  if (pend.length - prontas.length) partes.push(`${pend.length - prontas.length} sem pedido`);
+  $('upResumo').textContent = partes.length ? partes.join(' · ') : 'Nenhuma foto na fila.';
+  $('upSalvar').disabled = !prontas.length || enviando;
+  $('upSalvar').textContent = prontas.length ? `Salvar ${prontas.length} ${prontas.length === 1 ? 'foto' : 'fotos'}` : 'Salvar fotos';
+}
+
+let enviando = false;
+async function salvarFila() {
+  cfg.operador = $('upOper').value.trim(); cfg.loja = $('upLoja').value; gravarCfg();
+  if (!cfg.operador) { aviso('Informe o seu nome no campo Operador.'); $('upOper').focus(); return; }
+  const alvo = fila.filter((i) => (i.estado === 'pronta' || (i.estado === 'erro' && i.blob)) && i.pedido.trim());
+  if (!alvo.length) return;
+  enviando = true; resumoFila();
+  let ok = 0, falhas = 0;
+  const trabalhador = async () => {
+    while (alvo.length) {
+      const item = alvo.shift();
+      item.estado = 'enviando'; item.msg = 'Enviando…'; atualizaItem(item);
+      try {
+        const resp = await api('enviar', {
+          foto: await blobParaBase64(item.blob), mini: item.mini, hash: item.hash, tirada: item.tirada,
+          pedido: item.pedido, nf: item.nf, chave: item.chave, loja: item.loja, produto: item.produto, operador: cfg.operador
+        }, 120000);
+        item.estado = resp.duplicado ? 'duplicada' : 'salva'; item.msg = resp.duplicado ? 'Esta foto já estava salva.' : 'Salva.'; ok++;
+      } catch (e) { item.estado = 'erro'; item.msg = 'Não salvou: ' + e.message; falhas++; }
+      atualizaItem(item); resumoFila();
+    }
+  };
+  await Promise.all(Array.from({ length: ENVIOS_SIMULTANEOS }, trabalhador));
+  enviando = false; resumoFila();
+  aviso(falhas ? `${ok} salvas, ${falhas} com erro. Tente de novo as que falharam.` : `${ok} ${ok === 1 ? 'foto salva' : 'fotos salvas'}.`);
+  if (ok) carregar();
+}
+
+/* ===== Configuração ===== */
+function abrirCfg() {
+  $('cfgUrlBox').hidden = !!WEB_APP_URL;
+  $('cfgUrl').value = cfg.url || ''; $('cfgSenha').value = cfg.senha || ''; $('cfgOper').value = cfg.operador || '';
+  $('cfgStatus').textContent = ''; $('cfgStatus').className = 'status';
+  $('dlgCfg').showModal();
+}
+function lerCamposCfg() {
+  if (!WEB_APP_URL) cfg.url = $('cfgUrl').value.trim();
+  cfg.senha = $('cfgSenha').value; cfg.operador = $('cfgOper').value.trim();
+}
+async function testarCfg() {
+  lerCamposCfg();
+  const st = $('cfgStatus'); st.className = 'status'; st.textContent = 'Testando…';
+  try { const r = await api('ping', {}, 30000); st.textContent = `Conectado. ${r.total} ${r.total === 1 ? 'foto salva' : 'fotos salvas'} até agora.`; }
+  catch (e) { st.className = 'status err'; st.textContent = e.message; }
+}
+
+/* ===== Eventos ===== */
+$('btnAdd').addEventListener('click', abrirUpload);
+$('btnCfg').addEventListener('click', abrirCfg);
+$('cfgFechar').addEventListener('click', () => $('dlgCfg').close());
+$('cfgTestar').addEventListener('click', testarCfg);
+$('cfgSalvar').addEventListener('click', () => { lerCamposCfg(); gravarCfg(); $('dlgCfg').close(); carregar(); });
+$('upFechar').addEventListener('click', () => {
+  if (fila.some((i) => i.estado === 'pronta' && i.pedido.trim()) && !confirm('Há fotos que ainda não foram salvas. Fechar mesmo assim?')) return;
+  fila.length = 0; $('fila').replaceChildren(); $('dlgUp').close(); resumoFila();
+});
+$('btnEscolher').addEventListener('click', () => $('arq').click());
+$('arq').addEventListener('change', (e) => { adicionarArquivos(e.target.files); e.target.value = ''; });
+$('upSalvar').addEventListener('click', salvarFila);
+$('upLoja').addEventListener('change', () => { for (const i of fila) if (i.estado === 'pronta' || i.estado === 'lendo') { i.loja = $('upLoja').value; i.refs.selLoja.value = i.loja; } });
+const drop = $('drop');
+['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', (e) => adicionarArquivos(e.dataTransfer.files));
+
+$('vFechar').addEventListener('click', () => $('dlgView').close());
+$('vPrev').addEventListener('click', () => { if (visorIdx > 0) { visorIdx--; editando = false; pintarVisor(); } });
+$('vNext').addEventListener('click', () => { if (visorIdx < lista.length - 1) { visorIdx++; editando = false; pintarVisor(); } });
+$('vImg').addEventListener('click', (e) => e.currentTarget.classList.toggle('zoom'));
+$('dlgView').addEventListener('keydown', (e) => {
+  if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+  if (e.key === 'ArrowLeft') $('vPrev').click(); else if (e.key === 'ArrowRight') $('vNext').click();
+});
+$('dlgView').addEventListener('click', (e) => { if (e.target === $('dlgView')) $('dlgView').close(); });
+
+let buscaTimer;
+$('q').addEventListener('input', () => { clearTimeout(buscaTimer); buscaTimer = setTimeout(carregar, 350); });
+document.addEventListener('keydown', (e) => { if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !document.querySelector('dialog[open]')) { e.preventDefault(); $('q').focus(); } });
+$('seg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-p]'); if (!b) return;
+  periodo = b.dataset.p; $('de').value = ''; $('ate').value = '';
+  for (const x of $('seg').children) x.setAttribute('aria-pressed', String(x === b));
+  carregar();
+});
+for (const id of ['de', 'ate']) $(id).addEventListener('change', () => {
+  periodo = 'custom'; for (const x of $('seg').children) x.setAttribute('aria-pressed', 'false'); carregar();
+});
+for (const id of ['fLoja', 'fOper']) $(id).addEventListener('change', () => { mostrados = POR_PAGINA; renderizar(); const n = lista.length; dizStatus(`${n} ${n === 1 ? 'foto' : 'fotos'} ${modoBusca ? 'na busca' : 'no período'}`); });
+$('more').addEventListener('click', () => { mostrados += POR_PAGINA; renderizar(); });
+
+/* ===== Início ===== */
+renderizar();
+if (!configurado()) abrirCfg(); else carregar();
+})();
+</script>
+</body>
+</html>
