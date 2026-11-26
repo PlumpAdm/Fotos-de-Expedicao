@@ -108,7 +108,7 @@ dialog::backdrop { background: var(--shade); }
 .field > span { font-size: 12.5px; color: var(--muted); font-weight: 500; }
 .field input, .field select, .field textarea { width: 100%; }
 .field input.mono { font-family: var(--mono); }
-.field.auto input { border-left: 3px solid var(--ok); }
+.field.auto input, .field.auto select { border-left: 3px solid var(--ok); }
 .field.need input { border-color: var(--bad); }
 
 .queue { display: flex; flex-direction: column; gap: 10px; }
@@ -669,8 +669,9 @@ function interpretaCodigos(codigos) {
   const r = {};
   for (const c of codigos) {
     if (/^\d{44}$/.test(c)) { r.chave = c; r.nf = String(parseInt(c.slice(25, 34), 10)); }
-    else if (ehRastreio(c)) { if (!r.rastreio) r.rastreio = c; }
-    else if (!r.pedido && candidatoPedido(c)) r.pedido = c;
+    else if (ehRastreio(c)) { if (!r.rastreio) r.rastreio = c; if (/^BR\d{9,}[A-Z]{1,2}$/.test(c)) r.loja = 'Shopee'; }
+    else if (/sender_id/.test(c) && /"id"/.test(c)) { r.loja = 'Mercado Livre'; }
+    else if (!r.pedido && candidatoPedido(c)) { r.pedido = c; if (/^\d{15}$/.test(c)) r.loja = r.loja || 'TikTok Shop'; }
   }
   return r;
 }
@@ -719,10 +720,12 @@ async function prepara(item) {
     if (cods.pedido && !item.pedido) { item.pedido = cods.pedido; item.auto.pedido = true; }
     if (cods.nf && !item.nf) { item.nf = cods.nf; item.chave = cods.chave; item.auto.nf = true; }
     if (cods.rastreio && !item.rastreio) item.rastreio = cods.rastreio;
+    if (cods.loja && LOJAS.includes(cods.loja)) { item.loja = cods.loja; item.auto.loja = true; }
     item.estado = 'pronta';
-    item.msg = cods.pedido ? 'Pedido lido da foto. Confira antes de salvar.'
+    const lojaMsg = item.auto.loja ? ` Loja identificada pela etiqueta: ${item.loja}.` : '';
+    item.msg = (cods.pedido ? 'Pedido lido da foto. Confira antes de salvar.'
       : cods.rastreio ? 'Li o código de rastreio, mas o número do pedido não vem em código de barras. Digite o pedido como está escrito na etiqueta (campo “Pedido”).'
-      : 'Não consegui ler o código de barras. Digite o pedido ou use o leitor de código.';
+      : 'Não consegui ler o código de barras. Digite o pedido ou use o leitor de código.') + lojaMsg;
     item.aviso = !cods.pedido;
   } catch (e) {
     item.estado = 'erro'; item.msg = 'Não consegui abrir esta foto: ' + e.message;
@@ -787,14 +790,14 @@ function montaItem(item) {
     return h('label', { class: 'field', 'data-campo': chave }, h('span', { text: rotulo }), entrada);
   };
   const selLoja = h('select', { id: `f${item.id}-loja` }, ...LOJAS.map((l) => h('option', { value: l, text: l, selected: l === item.loja })));
-  selLoja.addEventListener('change', () => { item.loja = selLoja.value; });
+  selLoja.addEventListener('change', () => { item.loja = selLoja.value; item.auto.loja = false; marca(item); });
   const quando = h('input', { type: 'datetime-local', step: '1', id: `f${item.id}-tirada` });
   quando.addEventListener('change', () => { if (quando.value) { item.tirada = quando.value.replace('T', ' ').padEnd(19, ':00').slice(0, 19); item.fonteData = 'editada'; } atualizaItem(item); });
   const el = h('div', { class: 'q-item' },
     h('div', { class: 'q-thumb' }, h('img', { alt: '' }), h('button', { class: 'btn small', type: 'button', 'aria-label': 'Girar foto', text: '↻', onclick: () => girar(item) })),
     h('div', { class: 'q-fields' },
       campo('Pedido', 'pedido', { mono: true }), campo('NF ou chave', 'nf', { mono: true, num: true }), campo('Rastreio', 'rastreio', { mono: true }),
-      h('label', { class: 'field' }, h('span', { text: 'Loja' }), selLoja),
+      h('label', { class: 'field', 'data-campo': 'loja' }, h('span', { text: 'Loja' }), selLoja),
       campo('Produto / SKU', 'produto'),
       h('label', { class: 'field' }, h('span', { text: 'Data e hora da foto' }), quando),
       h('div', { class: 'q-state', 'data-estado': '' })),
@@ -803,7 +806,7 @@ function montaItem(item) {
   return el;
 }
 function marca(item) {
-  for (const k of ['pedido', 'nf']) item.el.querySelector(`[data-campo="${k}"]`).classList.toggle('auto', !!item.auto[k]);
+  for (const k of ['pedido', 'nf', 'loja']) item.el.querySelector(`[data-campo="${k}"]`).classList.toggle('auto', !!item.auto[k]);
   item.el.querySelector('[data-campo="pedido"]').classList.toggle('need', item.estado !== 'salva' && !item.pedido.trim() && item.estado === 'pronta');
 }
 function atualizaItem(item) {
@@ -895,7 +898,7 @@ $('upFechar').addEventListener('click', () => {
 $('btnEscolher').addEventListener('click', () => $('arq').click());
 $('arq').addEventListener('change', (e) => { adicionarArquivos(e.target.files); e.target.value = ''; });
 $('upSalvar').addEventListener('click', salvarFila);
-$('upLoja').addEventListener('change', () => { for (const i of fila) if (i.estado === 'pronta' || i.estado === 'lendo') { i.loja = $('upLoja').value; i.refs.selLoja.value = i.loja; } });
+$('upLoja').addEventListener('change', () => { for (const i of fila) if ((i.estado === 'pronta' || i.estado === 'lendo') && !i.auto.loja) { i.loja = $('upLoja').value; i.refs.selLoja.value = i.loja; } });
 const drop = $('drop');
 ['dragenter', 'dragover'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
