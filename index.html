@@ -662,11 +662,14 @@ async function lerCodigos(canvas) {
   }
   return [...achados];
 }
-function candidatoPedido(c) { return /^[A-Za-z0-9]{8,24}$/.test(c) && !/^\d{44}$/.test(c) && !/^\d{13}$/.test(c); }
+// Códigos de rastreio (Shopee Xpress: BR + números + letra; Correios: 2 letras + 9 números + BR) não são o número do pedido.
+function ehRastreio(c) { return /^BR\d{9,}[A-Z]{1,2}$/.test(c) || /^[A-Z]{2}\d{9}BR$/.test(c); }
+function candidatoPedido(c) { return /^[A-Za-z0-9]{8,24}$/.test(c) && !/^\d{44}$/.test(c) && !/^\d{13}$/.test(c) && !ehRastreio(c); }
 function interpretaCodigos(codigos) {
   const r = {};
   for (const c of codigos) {
     if (/^\d{44}$/.test(c)) { r.chave = c; r.nf = String(parseInt(c.slice(25, 34), 10)); }
+    else if (ehRastreio(c)) { if (!r.rastreio) r.rastreio = c; }
     else if (!r.pedido && candidatoPedido(c)) r.pedido = c;
   }
   return r;
@@ -691,7 +694,7 @@ function adicionarArquivos(arquivos) {
   const imagens = [...arquivos].filter((f) => f.type.startsWith('image/') || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
   if (!imagens.length) { aviso('Nenhuma imagem encontrada.'); return; }
   for (const f of imagens) {
-    const item = { id: ++seq, file: f, estado: 'lendo', msg: 'Preparando foto…', pedido: '', nf: '', chave: '', loja: $('upLoja').value, produto: '', tirada: '', fonteData: '', blob: null, mini: '', hash: '', auto: {} };
+    const item = { id: ++seq, file: f, estado: 'lendo', msg: 'Preparando foto…', pedido: '', nf: '', chave: '', rastreio: '', loja: $('upLoja').value, produto: '', tirada: '', fonteData: '', blob: null, mini: '', hash: '', auto: {} };
     fila.push(item);
     item.el = montaItem(item);
     $('fila').append(item.el);
@@ -715,8 +718,11 @@ async function prepara(item) {
     const cods = interpretaCodigos(await lerCodigos(tela).catch(() => []));
     if (cods.pedido && !item.pedido) { item.pedido = cods.pedido; item.auto.pedido = true; }
     if (cods.nf && !item.nf) { item.nf = cods.nf; item.chave = cods.chave; item.auto.nf = true; }
+    if (cods.rastreio && !item.rastreio) item.rastreio = cods.rastreio;
     item.estado = 'pronta';
-    item.msg = cods.pedido ? 'Pedido lido da foto. Confira antes de salvar.' : 'Não consegui ler o código de barras. Digite o pedido ou use o leitor de código.';
+    item.msg = cods.pedido ? 'Pedido lido da foto. Confira antes de salvar.'
+      : cods.rastreio ? 'Li o código de rastreio, mas o número do pedido não vem em código de barras. Digite o pedido como está escrito na etiqueta (campo “Pedido”).'
+      : 'Não consegui ler o código de barras. Digite o pedido ou use o leitor de código.';
     item.aviso = !cods.pedido;
   } catch (e) {
     item.estado = 'erro'; item.msg = 'Não consegui abrir esta foto: ' + e.message;
@@ -787,7 +793,7 @@ function montaItem(item) {
   const el = h('div', { class: 'q-item' },
     h('div', { class: 'q-thumb' }, h('img', { alt: '' }), h('button', { class: 'btn small', type: 'button', 'aria-label': 'Girar foto', text: '↻', onclick: () => girar(item) })),
     h('div', { class: 'q-fields' },
-      campo('Pedido', 'pedido', { mono: true }), campo('NF ou chave', 'nf', { mono: true, num: true }),
+      campo('Pedido', 'pedido', { mono: true }), campo('NF ou chave', 'nf', { mono: true, num: true }), campo('Rastreio', 'rastreio', { mono: true }),
       h('label', { class: 'field' }, h('span', { text: 'Loja' }), selLoja),
       campo('Produto / SKU', 'produto'),
       h('label', { class: 'field' }, h('span', { text: 'Data e hora da foto' }), quando),
@@ -802,7 +808,7 @@ function marca(item) {
 }
 function atualizaItem(item) {
   const el = item.el;
-  for (const k of ['pedido', 'nf', 'produto']) { const i = el.querySelector(`#f${item.id}-${k}`); if (i && i.value !== item[k]) i.value = item[k]; }
+  for (const k of ['pedido', 'nf', 'rastreio', 'produto']) { const i = el.querySelector(`#f${item.id}-${k}`); if (i && i.value !== item[k]) i.value = item[k]; }
   if (item.tirada) item.refs.quando.value = item.tirada.slice(0, 19).replace(' ', 'T');
   item.refs.selLoja.value = item.loja;
   const est = el.querySelector('[data-estado]');
@@ -845,7 +851,7 @@ async function salvarFila() {
       try {
         const resp = await api('enviar', {
           foto: await blobParaBase64(item.blob), mini: item.mini, hash: item.hash, tirada: item.tirada,
-          pedido: item.pedido, nf: item.nf, chave: item.chave, loja: item.loja, produto: item.produto, operador: cfg.operador
+          pedido: item.pedido, nf: item.nf, chave: item.chave, loja: item.loja, produto: item.produto, obs: item.rastreio.trim() ? 'Rastreio: ' + item.rastreio.trim() : '', operador: cfg.operador
         }, 120000);
         item.estado = resp.duplicado ? 'duplicada' : 'salva'; item.msg = resp.duplicado ? 'Esta foto já estava salva.' : 'Salva.'; ok++;
       } catch (e) { item.estado = 'erro'; item.msg = 'Não salvou: ' + e.message; falhas++; }
